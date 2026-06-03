@@ -1,0 +1,1956 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Full Code Appendix — NIBO Burger</title>
+<style>
+body{font-family:Inter,Segoe UI,Arial,sans-serif;background:#101114;color:#f5f1e8;margin:0;line-height:1.65}
+main{max-width:1000px;margin:auto;padding:36px 22px}
+a{color:#f3c94c} pre{white-space:pre-wrap;background:#17191f;border:1px solid #2b2e38;border-radius:14px;padding:22px;overflow:auto;color:#dbe7d6;font:13px/1.6 ui-monospace,Consolas,monospace}
+.header{border-bottom:1px solid #2b2e38;padding-bottom:20px;margin-bottom:24px}
+button{background:#f3c94c;color:#111;border:0;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer}
+@media print{button,.no-print{display:none} body{background:white;color:black} pre{background:white;color:black;border:1px solid #999}}
+</style></head><body><main>
+<div class="header"><p class="no-print"><a href="index.html">← Back to guide</a></p><h1>Full Code Appendix</h1><p>This appendix contains the complete extracted report content so the teacher can review all implemented tasks, line follower code, maze solver code, explanations, and conclusions in one place.</p><button onclick="window.print()">Print / Save as PDF</button></div>
+<pre>NIBO Burger Robot Programming Tasks 
+The following tasks demonstrate different programming concepts for the NIBO Burger robot, 
+including motor control, LEDs, buttons, timing, and animation effects. Each task was implemented 
+and tested using the Arduino IDE together with the NIBO Burger library.  
+A) Round Trip 
+Task Description 
+Create a program where the robot moves approximately 0.8–1 meter forward, performs a 180-degree 
+turn, and then returns to its starting position. 
+Code 
+#include &lt;NIBOburger.h&gt; 
+ 
+#define CRUISE_SPEED      380 
+#define TURN_SPEED        420 
+#define RAMP_STEP         40 
+#define RAMP_INTERVAL_MS  25 
+#define DRIVE_MS          2200 
+#define TURN_MS           1200 
+ 
+enum State { 
+  DRIVE_OUT, 
+  STOPPING_A, 
+  TURNING, 
+  STOPPING_B, 
+  DRIVE_BACK, 
+  STOPPING_C, 
+  DONE 
+}; 
+ 
+State state = DRIVE_OUT; 
+ 
+int currentSpeed = 0; 
+unsigned long stateStart = 0; 
+ 
+bool rampToward(int target) { 
+  static unsigned long lastStep = 0; 
+  unsigned long now = millis(); 
+ 
+  if (now - lastStep &lt; RAMP_INTERVAL_MS) 
+    return false; 
+ 
+  lastStep = now; 
+ 
+  if (currentSpeed &lt; target) 
+    currentSpeed = min(currentSpeed + RAMP_STEP, target); 
+ 
+  else if (currentSpeed &gt; target) 
+    currentSpeed = max(currentSpeed - RAMP_STEP, target); 
+ 
+
+  return (currentSpeed == target); 
+} 
+ 
+void setState(State s) { 
+  state = s; 
+  stateStart = millis(); 
+} 
+ 
+void setup() { 
+  NIBOburger.begin(); 
+  delay(800); 
+  stateStart = millis(); 
+} 
+ 
+void loop() { 
+ 
+  unsigned long elapsed = millis() - stateStart; 
+ 
+  switch (state) { 
+ 
+    case DRIVE_OUT: 
+      rampToward(CRUISE_SPEED); 
+      Engine.setSpeed(currentSpeed, currentSpeed); 
+ 
+      if (elapsed &gt;= DRIVE_MS) 
+        setState(STOPPING_A); 
+      break; 
+ 
+    case STOPPING_A: 
+      rampToward(0); 
+      Engine.setSpeed(currentSpeed, currentSpeed); 
+ 
+      if (currentSpeed == 0) 
+        setState(TURNING); 
+      break; 
+ 
+    case TURNING: 
+      Engine.setSpeed(-TURN_SPEED, TURN_SPEED); 
+ 
+      if (elapsed &gt;= TURN_MS) 
+        setState(STOPPING_B); 
+      break; 
+ 
+    case STOPPING_B: 
+      Engine.setSpeed(0, 0); 
+      currentSpeed = 0; 
+ 
+      if (elapsed &gt;= 300) 
+        setState(DRIVE_BACK); 
+      break; 
+ 
+    case DRIVE_BACK: 
+      rampToward(CRUISE_SPEED); 
+      Engine.setSpeed(currentSpeed, currentSpeed); 
+ 
+      if (elapsed &gt;= DRIVE_MS) 
+        setState(STOPPING_C); 
+      break; 
+ 
+
+    case STOPPING_C: 
+      rampToward(0); 
+      Engine.setSpeed(currentSpeed, currentSpeed); 
+ 
+      if (currentSpeed == 0) 
+        setState(DONE); 
+      break; 
+ 
+    case DONE: 
+      Engine.setSpeed(0, 0); 
+      break; 
+  } 
+} 
+Explanation 
+This program uses a state machine to control the robot step by step. The robot first drives forward, 
+then stops smoothly, rotates approximately 180 degrees, drives back to the starting point, and finally 
+stops completely. 
+The program avoids using long delay() functions and instead uses millis() for timing. This 
+allows the robot to continue processing actions without freezing the whole program. 
+The rampToward() function gradually increases or decreases motor speed, creating smoother 
+acceleration and braking. This prevents sudden movements and improves stability during driving 
+and turning. 
+The State variable keeps track of the robot’s current action. When one action finishes, the program 
+automatically switches to the next state and resets the internal timer. 
+B) Playing with Motors 
+Task Description 
+Create a motor-control program that demonstrates the use of global variables, local variables, and 
+adjustable motor power using buttons. 
+Code 
+#include &lt;NIBOburger.h&gt; 
+ 
+#define DEFAULT_POWER 400 
+#define STEP          200 
+#define MAX_POWER     1024 
+#define MIN_POWER    -1024 
+ 
+int power; 
+ 
+void setup() { 
+  NIBOburger.begin(); 
+  power = DEFAULT_POWER; 
+} 
+ 
+
+void loop() { 
+ 
+  NIBOburger.checkVoltage(); 
+ 
+  char c = NIBOburger.getKeyChar(); 
+ 
+  if (c != 0) { 
+ 
+    if (c == &#x27;a&#x27;) { 
+      power = power + STEP; 
+ 
+      if (power &gt; MAX_POWER) 
+        power = MAX_POWER; 
+    } 
+ 
+    if (c == &#x27;B&#x27;) { 
+      power = DEFAULT_POWER; 
+    } 
+ 
+    if (c == &#x27;c&#x27;) { 
+      power = power - STEP; 
+ 
+      if (power &lt; MIN_POWER) 
+        power = MIN_POWER; 
+    } 
+ 
+    Engine.setPWM(power, power); 
+  } 
+ 
+  delay(10); 
+} 
+Explanation 
+This program demonstrates basic motor power control using buttons and variables. 
+A global variable called power stores the current motor speed value. At startup, the motor power is 
+initialized with the default value of 400. 
+The robot continuously checks for button input using getKeyChar(): 
+• 
+Button 1 increases the motor power by 200.  
+• 
+Button 2 resets the power back to the default value.  
+• 
+Button 3 decreases the motor power by 200.  
+To protect the motors, the program limits the allowed power range between -1024 and 1024. 
+The selected power value is then applied to both motors using: 
+Engine.setPWM(power, power); 
+The checkVoltage() function is also used to monitor the battery voltage and help prevent unsafe 
+low-voltage operation. 
+ 
+
+C) Light Switch 
+ 
+Task Description 
+Create a button-controlled LED program with different LED patterns. 
+Code 
+#include &lt;NIBOburger.h&gt; 
+ 
+void setup() { 
+  NIBOburger.begin(); 
+} 
+ 
+void loop() { 
+ 
+  NIBOburger.checkVoltage(); 
+ 
+  char c = NIBOburger.getKeyChar(); 
+ 
+  if (c != 0) { 
+ 
+    if (c == &#x27;a&#x27;) { 
+      NIBOburger.setLed(LED1, 1); 
+      NIBOburger.setLed(LED2, 0); 
+      NIBOburger.setLed(LED3, 0); 
+      NIBOburger.setLed(LED4, 1); 
+    } 
+ 
+    if (c == &#x27;B&#x27;) { 
+      NIBOburger.setLed(LED1, 0); 
+      NIBOburger.setLed(LED2, 1); 
+      NIBOburger.setLed(LED3, 1); 
+      NIBOburger.setLed(LED4, 0); 
+    } 
+ 
+    if (c == &#x27;c&#x27;) { 
+      NIBOburger.setLed(LED1, 0); 
+      NIBOburger.setLed(LED2, 0); 
+      NIBOburger.setLed(LED3, 0); 
+      NIBOburger.setLed(LED4, 0); 
+    } 
+  } 
+ 
+  delay(10); 
+} 
+Explanation 
+This program controls the LEDs using button input. 
+When a button is released, the getKeyChar() function returns a character that identifies the pressed 
+button: 
+
+• 
+Button 1 (&#x27;a&#x27;) switches on LED1 and LED4.  
+• 
+Button 2 (&#x27;B&#x27;) switches on LED2 and LED3.  
+• 
+Button 3 (&#x27;c&#x27;) switches all LEDs off.  
+Each button action explicitly sets all four LEDs. This prevents unwanted leftover states from 
+previous button presses and keeps the LED behavior predictable. 
+D) Using Buttons 
+Task Description 
+Extend a button-based LED program to create flashing patterns and toggle behavior. 
+Code 
+#include &lt;NIBOburger.h&gt; 
+ 
+int mode; 
+unsigned long lastFlash; 
+int flashState; 
+ 
+void setup() { 
+  NIBOburger.begin(); 
+ 
+  mode = 0; 
+  lastFlash = 0; 
+  flashState = 0; 
+} 
+ 
+void loop() { 
+ 
+  NIBOburger.checkVoltage(); 
+ 
+  char c = NIBOburger.getKeyChar(); 
+ 
+  if (c != 0) { 
+ 
+    if (c == &#x27;a&#x27;) 
+      mode = (mode == 1) ? 0 : 1; 
+ 
+    if (c == &#x27;B&#x27;) 
+      mode = (mode == 2) ? 0 : 2; 
+ 
+    if (c == &#x27;c&#x27;) 
+      mode = (mode == 3) ? 0 : 3; 
+ 
+    if (mode == 0) { 
+      NIBOburger.setLed(LED1, 0); 
+      NIBOburger.setLed(LED2, 0); 
+      NIBOburger.setLed(LED3, 0); 
+      NIBOburger.setLed(LED4, 0); 
+    } 
+  } 
+ 
+
+  unsigned long now = millis(); 
+ 
+  unsigned long interval = 
+      (mode == 3) ? 80 : 300; 
+ 
+  if (mode != 0 &amp;&amp; 
+      now - lastFlash &gt;= interval) { 
+ 
+    lastFlash = now; 
+    flashState = !flashState; 
+ 
+    switch (mode) { 
+ 
+      case 1: 
+        NIBOburger.setLed(LED1, flashState); 
+        NIBOburger.setLed(LED2, 0); 
+        NIBOburger.setLed(LED3, flashState); 
+        NIBOburger.setLed(LED4, 0); 
+        break; 
+ 
+      case 2: 
+        NIBOburger.setLed(LED1, 0); 
+        NIBOburger.setLed(LED2, flashState); 
+        NIBOburger.setLed(LED3, 0); 
+        NIBOburger.setLed(LED4, flashState); 
+        break; 
+ 
+      case 3: 
+        NIBOburger.setLed(LED1, flashState); 
+        NIBOburger.setLed(LED2, flashState); 
+        NIBOburger.setLed(LED3, flashState); 
+        NIBOburger.setLed(LED4, flashState); 
+        break; 
+    } 
+  } 
+ 
+  delay(10); 
+} 
+ 
+Explanation 
+This program creates different flashing LED patterns controlled by buttons. 
+The variable mode stores the currently active flashing pattern: 
+• 
+Mode 1 flashes LED1 and LED3.  
+• 
+Mode 2 flashes LED2 and LED4.  
+• 
+Mode 3 flashes all LEDs quickly to create a police siren effect.  
+Pressing the same button again disables the active mode and turns all LEDs off. 
+The flashing system is implemented using millis() instead of long delays. This keeps the robot 
+responsive while the LEDs continue flashing. 
+The variable flashState alternates between ON and OFF states, creating the blinking effect. 
+
+E) Flashing LEDs Animation 
+Task Description 
+Create a smooth LED animation where the light travels back and forth across the LEDs. 
+Animation sequence: 
+LED1 → LED2 → LED3 → LED4 → LED3 → LED2 → repeat 
+Additional effects include: 
+• 
+Smooth continuous movement  
+• 
+Gradually increasing speed  
+• 
+Short all-LED flash after each cycle  
+Code 
+#include &lt;NIBOburger.h&gt; 
+ 
+#define MIN_INTERVAL  60 
+#define MAX_INTERVAL  300 
+#define SPEED_STEP    5 
+ 
+int sequence[] = {0, 1, 2, 3, 2, 1}; 
+ 
+int seqLength  = 6; 
+int seqIndex   = 0; 
+ 
+int interval   = MAX_INTERVAL; 
+int cycleCount = 0; 
+ 
+unsigned long lastStep; 
+ 
+void allOff() { 
+  NIBOburger.setLed(LED1, 0); 
+  NIBOburger.setLed(LED2, 0); 
+  NIBOburger.setLed(LED3, 0); 
+  NIBOburger.setLed(LED4, 0); 
+} 
+ 
+void allOn() { 
+  NIBOburger.setLed(LED1, 1); 
+  NIBOburger.setLed(LED2, 1); 
+  NIBOburger.setLed(LED3, 1); 
+  NIBOburger.setLed(LED4, 1); 
+} 
+ 
+void showStep(int index) { 
+ 
+  allOff(); 
+ 
+  switch (index) { 
+
+ 
+    case 0: 
+      NIBOburger.setLed(LED1, 1); 
+      break; 
+ 
+    case 1: 
+      NIBOburger.setLed(LED2, 1); 
+      break; 
+ 
+    case 2: 
+      NIBOburger.setLed(LED3, 1); 
+      break; 
+ 
+    case 3: 
+      NIBOburger.setLed(LED4, 1); 
+      break; 
+  } 
+} 
+ 
+void flashAll() { 
+  allOn(); 
+  delay(80); 
+ 
+  allOff(); 
+  delay(80); 
+} 
+ 
+void setup() { 
+  NIBOburger.begin(); 
+ 
+  lastStep = millis(); 
+  seqIndex = 0; 
+  cycleCount = 0; 
+} 
+ 
+void loop() { 
+ 
+  NIBOburger.checkVoltage(); 
+ 
+  unsigned long now = millis(); 
+ 
+  if (now - lastStep &gt;= (unsigned long)interval) { 
+ 
+    lastStep = now; 
+ 
+    showStep(sequence[seqIndex]); 
+ 
+    seqIndex++; 
+ 
+    if (seqIndex &gt;= seqLength) { 
+ 
+      seqIndex = 0; 
+      cycleCount++; 
+ 
+      flashAll(); 
+ 
+      if (interval &gt; MIN_INTERVAL) { 
+        interval = interval - SPEED_STEP; 
+      } 
+
+    } 
+  } 
+} 
+ 
+Explanation 
+This program creates a dynamic LED animation effect using an array-based sequence system. 
+The LED order is stored inside the array: 
+{0, 1, 2, 3, 2, 1} 
+The program moves through the sequence one step at a time using millis() timing. Only one LED 
+is active at each step, creating a smooth travelling-light effect. 
+After each full animation cycle: 
+• 
+All LEDs flash briefly together.  
+• 
+The animation speed increases slightly.  
+• 
+The delay interval decreases by 5 ms.  
+The animation gradually accelerates from 300 ms down to a minimum of 60 ms per step, producing 
+a smoother and more visually attractive effect. 
+The code is divided into smaller helper functions such as: 
+• 
+allOn()  
+• 
+allOff()  
+• 
+showStep()  
+• 
+flashAll()  
+This makes the program cleaner, easier to understand, and simpler to maintain. 
+ 
+ 
+ 
+ 
+ 
+
+NIBO Burger Line Follower — Code 
+Explanation 
+Project Overview 
+This program implements a PID-controlled line-following robot using the NIBO Burger platform 
+and Arduino 1.6.7. The robot uses three surface sensors to detect the line, calculates its position, and 
+corrects the motor speeds in real time to stay on track.  
+Code 
+#include &lt;NIBOburger.h&gt; 
+#include &lt;PID_v1.h&gt; 
+ 
+const int16_t BASE_SPEED   = 500; 
+const int16_t MAX_PWM      = 900; 
+const int16_t MIN_PWM      = 0; 
+const double  KP           = 3.0; 
+const double  KI           = 0.0; 
+const double  KD           = 1.0; 
+ 
+enum Position { 
+  CENTER         = 1, 
+  CENTER_RIGHT   = 2, 
+  CENTER_LEFT    = 3, 
+  HARD_RIGHT     = 4, 
+  HARD_LEFT      = 5, 
+  RECOVERY_RIGHT = 6, 
+  RECOVERY_LEFT  = 7, 
+  LOST           = 8, 
+}; 
+ 
+Position POSITION     = LOST; 
+Position POSITION_OLD = LOST; 
+ 
+float l_max = 1.0, c_max = 1.0, r_max = 1.0; 
+ 
+double pid_input    = 0.0; 
+double pid_output   = 0.0; 
+double pid_setpoint = 0.0; 
+ 
+PID steerPID(&amp;pid_input, &amp;pid_output, &amp;pid_setpoint, KP, KI, KD, DIRECT); 
+ 
+char key = &#x27; &#x27;; 
+ 
+float readL() { return l_max * SurfaceSensor.getL(0); } 
+float readC() { return c_max * SurfaceSensor.getC(0); } 
+float readR() { return r_max * SurfaceSensor.getR(0); } 
+ 
+bool onLine(float val)  { return val &lt; 45.0; } 
+bool offLine(float val) { return val &gt;= 45.0; } 
+ 
+void calibrate_floor() { 
+
+  POSITION = LOST; 
+  NIBOburger.setLeds(1, 1, 1, 1); 
+  key = &#x27; &#x27;; 
+ 
+  while (key != &#x27;A&#x27;) key = NIBOburger.getKeyChar(); 
+  NIBOburger.setLeds(0, 0, 0, 0); 
+ 
+  c_max = 100.0 / SurfaceSensor.getC(0); 
+  l_max = 100.0 / SurfaceSensor.getL(0); 
+  r_max = 100.0 / SurfaceSensor.getR(0); 
+ 
+  while (key != &#x27;B&#x27;) key = NIBOburger.getKeyChar(); 
+ 
+  NIBOburger.setLeds(1, 0, 1, 0); 
+ 
+  while (key != &#x27;C&#x27;) { 
+    key = NIBOburger.getKeyChar(); 
+    NIBOburger.waitAnalogUpdate(); 
+  } 
+ 
+  key = &#x27; &#x27;; 
+} 
+ 
+void get_position() { 
+  float l = readL(); 
+  float c = readC(); 
+  float r = readR(); 
+ 
+  pid_input = (double)(r - l); 
+ 
+  bool L = onLine(l); 
+  bool C = onLine(c); 
+  bool R = onLine(r); 
+ 
+  if (!L &amp;&amp; C &amp;&amp; !R) { 
+    POSITION = CENTER; 
+  }  
+  else if (L &amp;&amp; C &amp;&amp; !R) { 
+    POSITION = CENTER_LEFT; 
+  }  
+  else if (!L &amp;&amp; C &amp;&amp; R) { 
+    POSITION = CENTER_RIGHT; 
+  }  
+  else if (L &amp;&amp; !C &amp;&amp; !R) { 
+    POSITION = HARD_LEFT; 
+  }  
+  else if (!L &amp;&amp; !C &amp;&amp; R) { 
+    POSITION = HARD_RIGHT; 
+  }  
+  else if (L &amp;&amp; C &amp;&amp; R) { 
+    POSITION = CENTER; 
+  }  
+  else { 
+    if (POSITION == HARD_RIGHT || POSITION == RECOVERY_RIGHT) { 
+      POSITION = RECOVERY_RIGHT; 
+    }  
+    else { 
+      POSITION = RECOVERY_LEFT; 
+    } 
+
+  } 
+} 
+ 
+void follow_line() { 
+  int16_t pwm_left, pwm_right; 
+ 
+  switch (POSITION) { 
+ 
+    case RECOVERY_LEFT: 
+      Engine.setPWM(-300, 300); 
+      return; 
+ 
+    case RECOVERY_RIGHT: 
+      Engine.setPWM(300, -300); 
+      return; 
+ 
+    case HARD_LEFT: 
+      Engine.setPWM(-200, BASE_SPEED); 
+      return; 
+ 
+    case HARD_RIGHT: 
+      Engine.setPWM(BASE_SPEED, -200); 
+      return; 
+ 
+    default: 
+      steerPID.Compute(); 
+ 
+      pwm_left  = (int16_t)constrain(BASE_SPEED + pid_output, MIN_PWM, MAX_PWM); 
+      pwm_right = (int16_t)constrain(BASE_SPEED - pid_output, MIN_PWM, MAX_PWM); 
+ 
+      Engine.setPWM(pwm_left, pwm_right); 
+      return; 
+  } 
+} 
+ 
+void position_leds() { 
+  if (POSITION_OLD == POSITION) return; 
+ 
+  switch (POSITION) { 
+ 
+    case CENTER: 
+      NIBOburger.setLeds(0, 1, 1, 0); 
+      break; 
+ 
+    case CENTER_RIGHT: 
+      NIBOburger.setLeds(0, 0, 1, 0); 
+      break; 
+ 
+    case CENTER_LEFT: 
+      NIBOburger.setLeds(0, 1, 0, 0); 
+      break; 
+ 
+    case HARD_RIGHT: 
+      NIBOburger.setLeds(0, 0, 1, 1); 
+      break; 
+ 
+    case HARD_LEFT: 
+      NIBOburger.setLeds(1, 1, 0, 0); 
+      break; 
+
+ 
+    case RECOVERY_RIGHT: 
+      NIBOburger.setLeds(0, 0, 0, 1); 
+      break; 
+ 
+    case RECOVERY_LEFT: 
+      NIBOburger.setLeds(1, 0, 0, 0); 
+      break; 
+ 
+    case LOST: 
+      NIBOburger.setLeds(1, 0, 0, 1); 
+      break; 
+  } 
+ 
+  POSITION_OLD = POSITION; 
+} 
+ 
+void setup() { 
+  NIBOburger.begin(); 
+  SurfaceSensor.begin(); 
+  Engine.begin(); 
+ 
+  steerPID.SetMode(AUTOMATIC); 
+  steerPID.SetSampleTime(20); 
+  steerPID.SetOutputLimits(-400, 400); 
+ 
+  calibrate_floor(); 
+ 
+  delay(500); 
+  Engine.setPWM(BASE_SPEED, BASE_SPEED); 
+} 
+ 
+void loop() { 
+  NIBOburger.waitAnalogUpdate(); 
+  NIBOburger.checkVoltage(); 
+ 
+  get_position(); 
+  follow_line(); 
+  position_leds(); 
+} 
+Explanation 
+1. Global Constants and PID Setup 
+At the beginning of the program, the main control values are defined. These include the base speed, 
+maximum PWM value, minimum PWM value, and PID tuning constants. 
+The robot uses the following PID values: 
+• 
+KP = 3.0  
+• 
+KI = 0.0  
+• 
+KD = 1.0  
+
+The PID controller calculates steering correction based on the difference between the right and left 
+sensor readings. This difference is stored in pid_input. 
+The PID output is limited between -400 and 400. This prevents the robot from overcorrecting too 
+strongly when it moves at higher speed. 
+2. Position States 
+The program uses an enum called Position to describe where the robot is compared to the line. 
+The possible states are: 
+• 
+CENTER  
+• 
+CENTER_RIGHT  
+• 
+CENTER_LEFT  
+• 
+HARD_RIGHT  
+• 
+HARD_LEFT  
+• 
+RECOVERY_RIGHT  
+• 
+RECOVERY_LEFT  
+• 
+LOST  
+This makes the program easier to understand because each movement situation has a clear name. 
+For example, if the robot is exactly on the line, the state is CENTER. If only the right sensor detects 
+the line, the state becomes HARD_RIGHT, meaning the robot needs a stronger correction. 
+3. Sensor Reading and Calibrattion 
+The robot uses three surface sensors: 
+• 
+Left sensor  
+• 
+Center sensor  
+• 
+Right sensor  
+Before the robot starts following the line, it performs calibration using the calibrate_floor() 
+function. 
+During calibration, the robot measures the floor surface and calculates correction values for each 
+sensor: 
+c_max = 100.0 / SurfaceSensor.getC(0); 
+l_max = 100.0 / SurfaceSensor.getL(0); 
+r_max = 100.0 / SurfaceSensor.getR(0); 
+This makes the sensor readings more reliable under different lighting conditions and surface colors. 
+The functions readL(), readC(), and readR() return normalized values from the left, center, and 
+right sensors. 
+
+4. Line Detection 
+The program decides whether a sensor is on the line using this condition: 
+bool onLine(float val) { 
+  return val &lt; 45.0; 
+} 
+If the sensor value is lower than 45, the program considers that sensor to be detecting the line. 
+The opposite function is: 
+bool offLine(float val) { 
+  return val &gt;= 45.0; 
+} 
+This threshold helps the robot understand whether it is on the line, slightly off-center, or completely 
+lost. 
+5. Position Detection 
+The get_position() function reads all three sensors and decides the robot’s current position. 
+For example: 
+if (!L &amp;&amp; C &amp;&amp; !R) { 
+  POSITION = CENTER; 
+} 
+This means only the center sensor sees the line, so the robot is correctly aligned. 
+Other cases are used for left and right corrections: 
+• 
+Left and center sensors detect the line → CENTER_LEFT  
+• 
+Center and right sensors detect the line → CENTER_RIGHT  
+• 
+Only left sensor detects the line → HARD_LEFT  
+• 
+Only right sensor detects the line → HARD_RIGHT  
+If no sensor detects the line, the robot enters recovery mode. It remembers the last strong direction 
+and turns that way to search for the line again. 
+This is important because it prevents the robot from randomly turning in the wrong direction after 
+losing the line. 
+6. Motor Control and PID Steering 
+The follow_line() function controls the motors depending on the current position state. 
+
+For hard turns and recovery situations, the robot uses fixed motor values. 
+Example: 
+case HARD_LEFT: 
+  Engine.setPWM(-200, BASE_SPEED); 
+  return; 
+This makes the robot turn sharply to the left. 
+For normal line-following situations, the PID controller calculates a correction: 
+steerPID.Compute(); 
+Then the correction is applied to the motors: 
+pwm_left  = BASE_SPEED + pid_output; 
+pwm_right = BASE_SPEED - pid_output; 
+If the robot moves away from the line, one motor becomes faster and the other becomes slower. This 
+steers the robot smoothly back toward the line. 
+The constrain() function keeps motor values inside the safe range between MIN_PWM and MAX_PWM. 
+7. LED Feedback 
+The position_leds() function shows the robot’s current state using the onboard LEDs. 
+Each position state has a different LED pattern. 
+Examples: 
+• 
+CENTER lights the two middle LEDs.  
+• 
+HARD_LEFT lights the two left LEDs.  
+• 
+HARD_RIGHT lights the two right LEDs.  
+• 
+LOST lights the outer LEDs.  
+This is useful during testing because the robot can show what it is detecting without using the Serial 
+Monitor. 
+The function also checks whether the position changed before updating LEDs: 
+if (POSITION_OLD == POSITION) return; 
+This avoids unnecessary LED updates and prevents flickering. 
+ 
+
+8. Setup Function 
+The setup() function prepares the robot before the main program starts. 
+It initializes: 
+• 
+The NIBO Burger system  
+• 
+Surface sensors  
+• 
+Motors  
+• 
+PID controller  
+The PID controller is set to automatic mode: 
+steerPID.SetMode(AUTOMATIC); 
+The sample time is set to 20 milliseconds: 
+steerPID.SetSampleTime(20); 
+After that, the robot performs floor calibration and then starts moving with the base speed. 
+9. Main Loop 
+The loop() function is kept short and clean. 
+Each cycle performs four main actions: 
+NIBOburger.waitAnalogUpdate(); 
+NIBOburger.checkVoltage(); 
+ 
+get_position(); 
+follow_line(); 
+position_leds(); 
+First, the robot waits for updated sensor values. Then it checks the battery voltage for safety. 
+After that, it detects the current position, controls the motors, and updates the LEDs. 
+Keeping the loop simple makes the program easier to debug and modify. 
+ 
+ 
+Conclusion 
+
+This line follower program combines sensor calibration, PID control, position detection, motor 
+correction, and LED feedback. 
+The robot can follow a line smoothly using PID steering, but it can also make stronger corrections 
+when it reaches sharp turns or loses the line. Recovery states help the robot search for the line in the 
+correct direction instead of turning randomly. 
+Overall, the program is structured clearly, with separate functions for calibration, sensor reading, 
+position detection, motor control, and LED feedback. This makes the code easier to understand, test, 
+and improve. 
+ 
+NIBO Burger Maze Solver — Code 
+Explanation 
+Project Overview 
+This program implements a PID-controlled maze-solving robot using the NIBO Burger platform. 
+The robot follows a line, detects junctions, chooses the correct direction using a left-hand priority 
+rule, and continues until it reaches the finish. In testing, the robot solved the maze in 46 seconds.  
+Code 
+#include &lt;NIBOburger.h&gt; 
+#include &lt;PID_v1.h&gt; 
+ 
+const int16_t BASE_SPEED = 680; 
+const int16_t MAX_PWM = 900; 
+const int16_t MIN_PWM = 100; 
+ 
+const double KP = 3.5; 
+const double KI = 0.0; 
+const double KD = 1.2; 
+ 
+const uint16_t JUNCTION_CONFIRM_MS = 60; 
+const uint16_t POST_JUNCTION_GUARD_MS = 400; 
+const uint16_t JUNCTION_SCAN_MS = 180; 
+ 
+const uint16_t TURN_90_MS = 320; 
+const int16_t TURN_SPEED = 420; 
+ 
+const float JUNCTION_THRESHOLD = 35.0; 
+const float STRAIGHT_THRESHOLD = 55.0; 
+ 
+const uint8_t FINISH_JUNCTION = 99; 
+ 
+struct Paths { 
+  bool left; 
+  bool straight; 
+
+  bool right; 
+}; 
+ 
+enum Position { 
+  CENTER = 1, 
+  CENTER_RIGHT, 
+  CENTER_LEFT, 
+  HARD_RIGHT, 
+  HARD_LEFT, 
+  RECOVERY_RIGHT, 
+  RECOVERY_LEFT, 
+  LOST 
+}; 
+ 
+enum MazeState { 
+  MAZE_FOLLOWING, 
+  MAZE_JUNCTION, 
+  MAZE_FINISHED 
+}; 
+ 
+Position POSITION = LOST; 
+Position POSITION_OLD = LOST; 
+ 
+MazeState mazeState = MAZE_FOLLOWING; 
+ 
+uint8_t junctionCount = 0; 
+uint32_t lastJunctionMs = 0; 
+ 
+char key = &#x27; &#x27;; 
+ 
+float l_max = 1.0; 
+float c_max = 1.0; 
+float r_max = 1.0; 
+ 
+double pid_input = 0.0; 
+double pid_output = 0.0; 
+double pid_setpoint = 0.0; 
+ 
+PID steerPID( 
+  &amp;pid_input, 
+  &amp;pid_output, 
+  &amp;pid_setpoint, 
+  KP, 
+  KI, 
+  KD, 
+  DIRECT 
+); 
+ 
+float readL() { 
+  return l_max * SurfaceSensor.getL(0); 
+} 
+ 
+float readC() { 
+  return c_max * SurfaceSensor.getC(0); 
+} 
+ 
+float readR() { 
+  return r_max * SurfaceSensor.getR(0); 
+} 
+
+ 
+bool isJunctionArm(float val) { 
+  return val &lt; JUNCTION_THRESHOLD; 
+} 
+ 
+bool onLine(float val) { 
+  return val &lt; STRAIGHT_THRESHOLD; 
+} 
+ 
+bool offLine(float val) { 
+  return val &gt;= STRAIGHT_THRESHOLD; 
+} 
+ 
+void calibrate_floor() { 
+  POSITION = LOST; 
+ 
+  NIBOburger.setLeds(1, 1, 1, 1); 
+  key = &#x27; &#x27;; 
+ 
+  while (key != &#x27;A&#x27;) { 
+    key = NIBOburger.getKeyChar(); 
+  } 
+ 
+  NIBOburger.setLeds(0, 0, 0, 0); 
+ 
+  c_max = 100.0 / SurfaceSensor.getC(0); 
+  l_max = 100.0 / SurfaceSensor.getL(0); 
+  r_max = 100.0 / SurfaceSensor.getR(0); 
+ 
+  while (key != &#x27;B&#x27;) { 
+    key = NIBOburger.getKeyChar(); 
+  } 
+ 
+  NIBOburger.setLeds(1, 0, 1, 0); 
+ 
+  while (key != &#x27;C&#x27;) { 
+    key = NIBOburger.getKeyChar(); 
+  } 
+ 
+  key = &#x27; &#x27;; 
+} 
+ 
+void get_position() { 
+  float l = readL(); 
+  float c = readC(); 
+  float r = readR(); 
+ 
+  pid_input = (double)(r - l); 
+ 
+  bool L = onLine(l); 
+  bool C = onLine(c); 
+  bool R = onLine(r); 
+ 
+  if (!L &amp;&amp; C &amp;&amp; !R) { 
+    POSITION = CENTER; 
+  } 
+  else if (L &amp;&amp; C &amp;&amp; !R) { 
+    POSITION = CENTER_LEFT; 
+  } 
+
+  else if (!L &amp;&amp; C &amp;&amp; R) { 
+    POSITION = CENTER_RIGHT; 
+  } 
+  else if (L &amp;&amp; !C &amp;&amp; !R) { 
+    POSITION = HARD_LEFT; 
+  } 
+  else if (!L &amp;&amp; !C &amp;&amp; R) { 
+    POSITION = HARD_RIGHT; 
+  } 
+  else if (L &amp;&amp; C &amp;&amp; R) { 
+    POSITION = CENTER; 
+  } 
+  else { 
+    POSITION = 
+      (POSITION == HARD_RIGHT || POSITION == RECOVERY_RIGHT) 
+      ? RECOVERY_RIGHT 
+      : RECOVERY_LEFT; 
+  } 
+} 
+ 
+void follow_line_step() { 
+  switch (POSITION) { 
+ 
+    case RECOVERY_LEFT: 
+      Engine.setPWM(-350, 350); 
+      break; 
+ 
+    case RECOVERY_RIGHT: 
+      Engine.setPWM(350, -350); 
+      break; 
+ 
+    case HARD_LEFT: 
+      Engine.setPWM(-150, BASE_SPEED); 
+      break; 
+ 
+    case HARD_RIGHT: 
+      Engine.setPWM(BASE_SPEED, -150); 
+      break; 
+ 
+    default: 
+      steerPID.Compute(); 
+ 
+      Engine.setPWM( 
+        constrain((int16_t)(BASE_SPEED + pid_output), MIN_PWM, MAX_PWM), 
+        constrain((int16_t)(BASE_SPEED - pid_output), MIN_PWM, MAX_PWM) 
+      ); 
+      break; 
+  } 
+} 
+ 
+bool junctionDetected() { 
+  if (millis() - lastJunctionMs &lt; POST_JUNCTION_GUARD_MS) { 
+    return false; 
+  } 
+ 
+  static uint32_t firstSeenMs = 0; 
+ 
+  float l = readL(); 
+  float c = readC(); 
+
+  float r = readR(); 
+ 
+  bool leftArm = isJunctionArm(l); 
+  bool rightArm = isJunctionArm(r); 
+  bool centerOn = onLine(c); 
+ 
+  bool isJunction = centerOn &amp;&amp; (leftArm || rightArm); 
+ 
+  if (isJunction) { 
+ 
+    if (firstSeenMs == 0) { 
+      firstSeenMs = millis(); 
+    } 
+ 
+    if (millis() - firstSeenMs &gt;= JUNCTION_CONFIRM_MS) { 
+      firstSeenMs = 0; 
+      return true; 
+    } 
+  } 
+  else { 
+    firstSeenMs = 0; 
+  } 
+ 
+  return false; 
+} 
+ 
+Paths scanJunction() { 
+  Paths p = {false, false, false}; 
+ 
+  uint32_t start = millis(); 
+ 
+  uint8_t leftCount = 0; 
+  uint8_t rightCount = 0; 
+  uint8_t centerCount = 0; 
+ 
+  while (millis() - start &lt; JUNCTION_SCAN_MS) { 
+ 
+    Engine.setPWM(BASE_SPEED, BASE_SPEED); 
+    NIBOburger.waitAnalogUpdate(); 
+ 
+    float l = readL(); 
+    float c = readC(); 
+    float r = readR(); 
+ 
+    if (isJunctionArm(l)) { 
+      leftCount++; 
+    } 
+ 
+    if (isJunctionArm(r)) { 
+      rightCount++; 
+    } 
+ 
+    if (onLine(c)) { 
+      centerCount++; 
+    } 
+  } 
+ 
+  uint8_t minHits = 2; 
+ 
+
+  p.left = (leftCount &gt;= minHits); 
+  p.right = (rightCount &gt;= minHits); 
+  p.straight = (centerCount &gt;= (JUNCTION_SCAN_MS / 10)); 
+ 
+  Engine.setPWM(BASE_SPEED, BASE_SPEED); 
+  delay(20); 
+ 
+  Engine.setPWM(0, 0); 
+ 
+  return p; 
+} 
+ 
+void doTurnLeft() { 
+  Engine.setPWM(-TURN_SPEED, TURN_SPEED); 
+  delay(TURN_90_MS); 
+  Engine.setPWM(0, 0); 
+} 
+ 
+void doTurnRight() { 
+  Engine.setPWM(TURN_SPEED, -TURN_SPEED); 
+  delay(TURN_90_MS); 
+  Engine.setPWM(0, 0); 
+} 
+ 
+void doUTurn() { 
+  Engine.setPWM(TURN_SPEED, -TURN_SPEED); 
+  delay(TURN_90_MS * 2); 
+  Engine.setPWM(0, 0); 
+} 
+ 
+void finishRoutine() { 
+  Engine.setPWM(0, 0); 
+ 
+  while (true) { 
+    NIBOburger.setLeds(1, 1, 1, 1); 
+    delay(300); 
+ 
+    NIBOburger.setLeds(0, 0, 0, 0); 
+    delay(300); 
+  } 
+} 
+ 
+void position_leds() { 
+ 
+  if (POSITION_OLD == POSITION) { 
+    return; 
+  } 
+ 
+  switch (POSITION) { 
+ 
+    case CENTER: 
+      NIBOburger.setLeds(0, 1, 1, 0); 
+      break; 
+ 
+    case CENTER_RIGHT: 
+      NIBOburger.setLeds(0, 0, 1, 0); 
+      break; 
+ 
+    case CENTER_LEFT: 
+
+      NIBOburger.setLeds(0, 1, 0, 0); 
+      break; 
+ 
+    case HARD_RIGHT: 
+      NIBOburger.setLeds(0, 0, 1, 1); 
+      break; 
+ 
+    case HARD_LEFT: 
+      NIBOburger.setLeds(1, 1, 0, 0); 
+      break; 
+ 
+    case RECOVERY_RIGHT: 
+      NIBOburger.setLeds(0, 0, 0, 1); 
+      break; 
+ 
+    case RECOVERY_LEFT: 
+      NIBOburger.setLeds(1, 0, 0, 0); 
+      break; 
+ 
+    case LOST: 
+      NIBOburger.setLeds(1, 0, 0, 1); 
+      break; 
+  } 
+ 
+  POSITION_OLD = POSITION; 
+} 
+ 
+void setup() { 
+  NIBOburger.begin(); 
+  SurfaceSensor.begin(); 
+  Engine.begin(); 
+ 
+  steerPID.SetMode(AUTOMATIC); 
+  steerPID.SetSampleTime(15); 
+  steerPID.SetOutputLimits(-450, 450); 
+ 
+  calibrate_floor(); 
+ 
+  delay(500); 
+ 
+  Engine.setPWM(BASE_SPEED, BASE_SPEED); 
+} 
+ 
+void loop() { 
+ 
+  NIBOburger.waitAnalogUpdate(); 
+  NIBOburger.checkVoltage(); 
+ 
+  switch (mazeState) { 
+ 
+    case MAZE_FOLLOWING: 
+ 
+      get_position(); 
+      follow_line_step(); 
+      position_leds(); 
+ 
+      if (junctionDetected()) { 
+        mazeState = MAZE_JUNCTION; 
+      } 
+
+ 
+      break; 
+ 
+    case MAZE_JUNCTION: { 
+ 
+      junctionCount++; 
+      lastJunctionMs = millis(); 
+ 
+      if (junctionCount &gt;= FINISH_JUNCTION) { 
+        mazeState = MAZE_FINISHED; 
+        break; 
+      } 
+ 
+      Paths p = scanJunction(); 
+ 
+      if (p.left) { 
+        doTurnLeft(); 
+        NIBOburger.setLeds(1, 0, 0, 0); 
+      } 
+      else if (p.straight) { 
+        NIBOburger.setLeds(0, 1, 1, 0); 
+      } 
+      else if (p.right) { 
+        doTurnRight(); 
+        NIBOburger.setLeds(0, 0, 0, 1); 
+      } 
+      else { 
+        doUTurn(); 
+        NIBOburger.setLeds(1, 0, 0, 1); 
+      } 
+ 
+      mazeState = MAZE_FOLLOWING; 
+ 
+      break; 
+    } 
+ 
+    case MAZE_FINISHED: 
+      finishRoutine(); 
+      break; 
+  } 
+} 
+Explanation 
+1. Global Constants and Configuration 
+At the beginning of the program, all main tuning values are defined as constants. 
+These include: 
+• 
+BASE_SPEED  
+• 
+MAX_PWM  
+• 
+MIN_PWM  
+• 
+PID values: KP, KI, and KD  
+• 
+Junction timing values  
+
+• 
+Turn speed and turn duration  
+• 
+Sensor thresholds  
+Keeping these values at the top makes the robot easier to tune. For example, if the robot turns too 
+much or too little, only TURN_90_MS needs to be adjusted. 
+Two different thresholds are used: 
+const float JUNCTION_THRESHOLD = 35.0; 
+const float STRAIGHT_THRESHOLD = 55.0; 
+JUNCTION_THRESHOLD is stricter and is used to detect junction arms. 
+STRAIGHT_THRESHOLD is more relaxed and is used for normal line-following detection. 
+2. Data Structures and State Machines 
+The program uses a Paths structure: 
+struct Paths { 
+  bool left; 
+  bool straight; 
+  bool right; 
+}; 
+This structure stores which directions are available at a junction. 
+The program also uses two enums: 
+enum Position 
+enum MazeState 
+Position describes where the robot is compared to the line, for example: 
+• 
+CENTER  
+• 
+HARD_LEFT  
+• 
+HARD_RIGHT  
+• 
+RECOVERY_LEFT  
+• 
+RECOVERY_RIGHT  
+MazeState controls the higher-level maze behavior: 
+• 
+MAZE_FOLLOWING  
+• 
+MAZE_JUNCTION  
+• 
+MAZE_FINISHED  
+This creates a clear two-level control system. One part controls line following, and the other part 
+controls maze decisions. 
+
+3. Sensor Calibration 
+Before the robot starts moving, it performs floor calibration using calibrate_floor(). 
+The robot waits for button input, reads the floor values, and calculates scale factors: 
+c_max = 100.0 / SurfaceSensor.getC(0); 
+l_max = 100.0 / SurfaceSensor.getL(0); 
+r_max = 100.0 / SurfaceSensor.getR(0); 
+This normalizes the left, center, and right sensor readings. 
+Calibration is important because sensor values can change depending on: 
+• 
+Room lighting  
+• 
+Floor color  
+• 
+Battery level  
+• 
+Sensor differences  
+After calibration, the robot can detect the line more consistently. 
+4. Position Detection 
+The function get_position() reads all three surface sensors: 
+float l = readL(); 
+float c = readC(); 
+float r = readR(); 
+Then it checks which sensors are on the line. 
+The PID input is calculated as: 
+pid_input = (double)(r - l); 
+This gives the controller a signed error value. If the robot moves too far to one side, the difference 
+between the left and right sensor values becomes larger, and the PID controller can correct it. 
+The robot is then classified into states such as: 
+• 
+CENTER  
+• 
+CENTER_LEFT  
+• 
+CENTER_RIGHT  
+• 
+HARD_LEFT  
+• 
+HARD_RIGHT  
+If the robot loses the line, it enters a recovery state. The recovery direction depends on the last hard 
+turn state, so the robot searches for the line in the most likely direction instead of turning randomly. 
+
+5. Line Following 
+The function follow_line_step() controls the motors during normal movement. 
+For sharp turns or recovery situations, fixed PWM values are used. 
+Example: 
+case HARD_LEFT: 
+  Engine.setPWM(-150, BASE_SPEED); 
+  break; 
+This makes the robot turn strongly to the left. 
+For normal line-following states, the PID controller is used: 
+steerPID.Compute(); 
+The PID output is added to one motor and subtracted from the other: 
+BASE_SPEED + pid_output 
+BASE_SPEED - pid_output 
+This allows the robot to make smooth corrections while following the line. 
+The motor values are limited using constrain() so they stay inside the safe range. 
+6. Junction Detection 
+The function junctionDetected() checks whether the robot has reached an intersection. 
+A junction is detected when: 
+• 
+The center sensor is still on the line.  
+• 
+At least one side sensor detects a junction arm.  
+The program also uses a guard time: 
+POST_JUNCTION_GUARD_MS = 400 
+This prevents the same junction from being counted more than once. 
+The program also requires the junction condition to stay true for: 
+JUNCTION_CONFIRM_MS = 60 
+This prevents false detection caused by sensor noise. 
+
+So, the robot does not immediately react to one short reading. It waits until the junction is 
+confirmed. 
+7. Junction Scanning 
+After a junction is detected, the robot runs scanJunction(). 
+During this function, the robot moves forward for a short time: 
+JUNCTION_SCAN_MS = 180 
+While moving, it counts how often each sensor detects a possible path. 
+The program uses counters: 
+• 
+leftCount  
+• 
+rightCount  
+• 
+centerCount  
+This is better than taking only one sensor reading because it makes detection more reliable. 
+After scanning, the function returns which paths are available: 
+p.left 
+p.straight 
+p.right 
+The robot then uses this information to decide where to go next. 
+8. Turning Functions 
+The program has three separate turning functions: 
+doTurnLeft(); 
+doTurnRight(); 
+doUTurn(); 
+A left turn uses opposite motor directions: 
+Engine.setPWM(-TURN_SPEED, TURN_SPEED); 
+A right turn uses the opposite pattern: 
+Engine.setPWM(TURN_SPEED, -TURN_SPEED); 
+A U-turn uses the same idea as a right turn, but for twice as long: 
+delay(TURN_90_MS * 2); 
+
+These functions make the code cleaner because the turning logic is separated from the main maze 
+decision logic. 
+9. Maze Navigation Strategy 
+The robot uses a left-hand priority rule. 
+At each junction, it checks the possible directions in this order: 
+1. Left  
+2. Straight  
+3. Right  
+4. U-turn  
+The decision logic looks like this: 
+if (p.left) { 
+  doTurnLeft(); 
+} 
+else if (p.straight) { 
+  // continue forward 
+} 
+else if (p.right) { 
+  doTurnRight(); 
+} 
+else { 
+  doUTurn(); 
+} 
+This means the robot always prefers the left path if it is available. 
+This is a simple maze-solving strategy that can solve many line mazes, especially when the maze is 
+connected and has no isolated loops. 
+10. Finish Detection 
+The robot counts how many junctions it has passed: 
+junctionCount++; 
+When the counter reaches the value stored in: 
+FINISH_JUNCTION 
+the robot switches to the finished state. 
+In the finished state, the robot stops the motors and flashes all LEDs: 
+finishRoutine(); 
+
+This gives a clear visual signal that the maze has been completed. 
+In this version, FINISH_JUNCTION is set to 99, so the finish condition depends on a known junction 
+count. 
+11. LED Feedback 
+The position_leds() function shows the robot’s current detected position using the onboard 
+LEDs. 
+Examples: 
+• 
+CENTER lights the middle LEDs.  
+• 
+HARD_LEFT lights the left LEDs.  
+• 
+HARD_RIGHT lights the right LEDs.  
+• 
+LOST lights the outer LEDs.  
+This is useful during testing because it shows what the robot is detecting without needing a 
+computer or Serial Monitor. 
+The function only updates LEDs when the position changes: 
+if (POSITION_OLD == POSITION) { 
+  return; 
+} 
+This avoids unnecessary updates and reduces flickering. 
+12. Main Loop 
+The main loop is organized using a switch statement based on mazeState. 
+During MAZE_FOLLOWING, the robot: 
+• 
+Reads its position  
+• 
+Follows the line  
+• 
+Updates LEDs  
+• 
+Checks for junctions  
+During MAZE_JUNCTION, the robot: 
+• 
+Counts the junction  
+• 
+Scans the available paths  
+• 
+Chooses a direction  
+• 
+Executes the turn  
+• 
+Returns to line following  
+During MAZE_FINISHED, the robot: 
+
+• 
+Stops moving  
+• 
+Flashes all LEDs continuously  
+This structure keeps the program organized and easy to understand. 
+Conclusion 
+This maze solver program extends the basic line follower by adding junction detection, path 
+scanning, and decision-making. 
+The robot follows the line using PID control, detects intersections, and chooses a path using the left-
+hand priority rule. It also includes recovery behavior when the line is lost, LED feedback for 
+debugging, and a finish routine for the end of the maze. 
+Overall, the program is structured clearly and separates the main responsibilities into different 
+functions. This makes it easier to tune, test, and explain in a report. 
+ 
+NIBO Burger Maze Solver with Memory — 
+Code Explanation 
+Project Overview 
+This program is an advanced version of the NIBO Burger maze solver. It follows a line using PID 
+control, detects junctions, and remembers which paths were already explored. This allows the robot 
+to make smarter decisions, avoid repeating the same paths, and backtrack when needed. 
+During testing, this version solved the maze in 54 seconds.  
+Code 
+#include &lt;NIBOburger.h&gt; 
+#include &lt;PID_v1.h&gt; 
+ 
+const int16_t BASE_SPEED = 680; 
+const int16_t MAX_PWM = 900; 
+const int16_t MIN_PWM = 100; 
+ 
+const double KP = 3.5; 
+const double KI = 0.0; 
+const double KD = 1.2; 
+ 
+const uint16_t JUNCTION_CONFIRM_MS = 60; 
+const uint16_t POST_JUNCTION_GUARD_MS = 400; 
+const uint16_t JUNCTION_SCAN_MS = 180; 
+ 
+
+const uint16_t TURN_90_MS = 320; 
+const int16_t TURN_SPEED = 420; 
+ 
+const float JUNCTION_THRESHOLD = 35.0; 
+const float STRAIGHT_THRESHOLD = 55.0; 
+ 
+const uint8_t MAX_JUNCTIONS = 32; 
+ 
+enum Arm : uint8_t { 
+  ARM_LEFT = 0, 
+  ARM_STRAIGHT = 1, 
+  ARM_RIGHT = 2, 
+  ARM_BACK = 3 
+}; 
+ 
+struct JunctionRecord { 
+  uint8_t marks[4]; 
+  bool valid; 
+}; 
+ 
+JunctionRecord junctionMemory[MAX_JUNCTIONS]; 
+ 
+uint8_t junctionCount = 0; 
+uint8_t currentJunction = 255; 
+ 
+Arm arrivalArm = ARM_BACK; 
+ 
+struct Paths { 
+  bool left; 
+  bool straight; 
+  bool right; 
+}; 
+ 
+enum Position { 
+  CENTER = 1, 
+  CENTER_RIGHT, 
+  CENTER_LEFT, 
+  HARD_RIGHT, 
+  HARD_LEFT, 
+  RECOVERY_RIGHT, 
+  RECOVERY_LEFT, 
+  LOST 
+}; 
+ 
+enum MazeState { 
+  MAZE_FOLLOWING, 
+  MAZE_JUNCTION, 
+  MAZE_FINISHED 
+}; 
+ 
+Position POSITION = LOST; 
+Position POSITION_OLD = LOST; 
+ 
+MazeState mazeState = MAZE_FOLLOWING; 
+ 
+uint32_t lastJunctionMs = 0; 
+ 
+char key = &#x27; &#x27;; 
+ 
+
+float l_max = 1.0; 
+float c_max = 1.0; 
+float r_max = 1.0; 
+ 
+double pid_input = 0.0; 
+double pid_output = 0.0; 
+double pid_setpoint = 0.0; 
+ 
+PID steerPID( 
+  &amp;pid_input, 
+  &amp;pid_output, 
+  &amp;pid_setpoint, 
+  KP, 
+  KI, 
+  KD, 
+  DIRECT 
+); 
+ 
+float readL() { 
+  return l_max * SurfaceSensor.getL(0); 
+} 
+ 
+float readC() { 
+  return c_max * SurfaceSensor.getC(0); 
+} 
+ 
+float readR() { 
+  return r_max * SurfaceSensor.getR(0); 
+} 
+ 
+bool isJunctionArm(float val) { 
+  return val &lt; JUNCTION_THRESHOLD; 
+} 
+ 
+bool onLine(float val) { 
+  return val &lt; STRAIGHT_THRESHOLD; 
+} 
+ 
+Explanation 
+1. Global Constants and Configuration 
+At the beginning of the program, all important tuning values are defined as constants. 
+These include: 
+• 
+BASE_SPEED  
+• 
+MAX_PWM  
+• 
+MIN_PWM  
+• 
+PID values: KP, KI, and KD  
+• 
+Junction timing values  
+• 
+Turn speed and turn duration  
+• 
+Sensor thresholds  
+
+Example: 
+const int16_t BASE_SPEED = 680; 
+const uint16_t TURN_90_MS = 320; 
+This makes the program easier to tune. For example, if the robot turns too much or too little, the 
+value of TURN_90_MS can be adjusted without changing the main logic. 
+The program also uses two different sensor thresholds: 
+const float JUNCTION_THRESHOLD = 35.0; 
+const float STRAIGHT_THRESHOLD = 55.0; 
+JUNCTION_THRESHOLD is used for detecting side paths at junctions. 
+STRAIGHT_THRESHOLD is used for normal line following. 
+Using two thresholds helps reduce false detections and makes the robot more stable. 
+ 
+ 
+2. Arm Enum 
+The Arm enum defines the four possible directions at a junction: 
+enum Arm : uint8_t { 
+  ARM_LEFT = 0, 
+  ARM_STRAIGHT = 1, 
+  ARM_RIGHT = 2, 
+  ARM_BACK = 3 
+}; 
+These directions are: 
+• 
+Left  
+• 
+Straight  
+• 
+Right  
+• 
+Back  
+Instead of using numbers directly, the program uses clear names such as ARM_LEFT and ARM_RIGHT. 
+This makes the code easier to read and understand. 
+ARM_BACK is especially important because it represents the direction the robot came from. This helps 
+the robot backtrack when it reaches a dead end. 
+ 
+
+3. Junction Memory System 
+The main improvement in this version is the memory system. 
+Each junction is stored using this structure: 
+struct JunctionRecord { 
+  uint8_t marks[4]; 
+  bool valid; 
+}; 
+The marks array stores how many times each direction has been used. 
+For example: 
+marks[ARM_LEFT] 
+marks[ARM_STRAIGHT] 
+marks[ARM_RIGHT] 
+marks[ARM_BACK] 
+The valid variable shows whether this junction record is already active. 
+All junction records are stored in this array: 
+JunctionRecord junctionMemory[MAX_JUNCTIONS]; 
+This allows the robot to remember up to 32 junctions. 
+Because of this, the robot does not only follow a fixed left-hand rule. Instead, it remembers which 
+paths were already explored and can choose less-used paths first. 
+ 
+4. Junction Tracking Variables 
+The program uses these global variables to manage maze navigation: 
+uint8_t junctionCount = 0; 
+uint8_t currentJunction = 255; 
+Arm arrivalArm = ARM_BACK; 
+junctionCount stores how many junctions were discovered. 
+currentJunction stores which junction the robot is currently handling. 
+The value 255 is used as a special value meaning that no active junction is selected yet. 
+arrivalArm stores the direction from which the robot entered the junction. This is important 
+because the robot needs to know where it came from in order to backtrack correctly. 
+
+5. Paths Structure 
+The Paths structure stores which physical exits exist at a junction: 
+struct Paths { 
+  bool left; 
+  bool straight; 
+  bool right; 
+}; 
+For example: 
+• 
+left = true means there is a left path.  
+• 
+straight = true means the robot can continue forward.  
+• 
+right = true means there is a right path.  
+This is different from the memory system. 
+Paths tells the robot what paths physically exist. 
+JunctionRecord tells the robot which paths were already visited. 
+The robot uses both pieces of information to choose the best direction. 
+ 
+6. Position and Maze States 
+The program uses two different state systems. 
+The first one is Position: 
+enum Position { 
+  CENTER = 1, 
+  CENTER_RIGHT, 
+  CENTER_LEFT, 
+  HARD_RIGHT, 
+  HARD_LEFT, 
+  RECOVERY_RIGHT, 
+  RECOVERY_LEFT, 
+  LOST 
+}; 
+This describes the robot’s position compared to the line. 
+For example: 
+• 
+CENTER means the robot is correctly aligned.  
+• 
+HARD_LEFT means the robot must turn strongly left.  
+• 
+RECOVERY_RIGHT means the robot lost the line and is searching to the right.  
+
+The second one is MazeState: 
+enum MazeState { 
+  MAZE_FOLLOWING, 
+  MAZE_JUNCTION, 
+  MAZE_FINISHED 
+}; 
+This controls the higher-level maze behavior. 
+• 
+MAZE_FOLLOWING means the robot is following the line.  
+• 
+MAZE_JUNCTION means the robot is handling an intersection.  
+• 
+MAZE_FINISHED means the robot has completed the maze.  
+Using two state systems makes the program cleaner because line following and maze decisions are 
+separated. 
+ 
+ 
+7. Sensor Reading Functions 
+The robot uses three surface sensors: 
+• 
+Left sensor  
+• 
+Center sensor  
+• 
+Right sensor  
+The functions below read normalized sensor values: 
+float readL() { 
+  return l_max * SurfaceSensor.getL(0); 
+} 
+ 
+float readC() { 
+  return c_max * SurfaceSensor.getC(0); 
+} 
+ 
+float readR() { 
+  return r_max * SurfaceSensor.getR(0); 
+} 
+The values l_max, c_max, and r_max are calibration factors. 
+They help make the readings more reliable under different lighting conditions and floor surfaces. 
+ 
+ 
+
+ 
+8. Line and Junction Detection 
+The function below checks whether a sensor detects a junction arm: 
+bool isJunctionArm(float val) { 
+  return val &lt; JUNCTION_THRESHOLD; 
+} 
+This uses the stricter threshold value. 
+The function below checks whether the robot is on the line: 
+bool onLine(float val) { 
+  return val &lt; STRAIGHT_THRESHOLD; 
+} 
+This uses the more relaxed threshold value. 
+Separating these two functions makes the code easier to understand. It also allows the robot to detect 
+normal lines and junctions more accurately. 
+ 
+9. PID Line Following 
+The robot uses PID control to follow the line smoothly. 
+The PID controller uses the difference between the right and left sensor readings: 
+pid_input = r - l; 
+If the robot moves too far to one side, the PID controller adjusts the motor speeds. 
+The correction is applied like this: 
+left motor  = BASE_SPEED + pid_output 
+right motor = BASE_SPEED - pid_output 
+This means one motor speeds up while the other slows down, helping the robot return to the line 
+smoothly. 
+PID control makes the robot move more naturally than simple left/right corrections. 
+ 
+ 
+
+10. Memory-Based Maze Solving 
+The most important part of this version is that the robot remembers explored paths. 
+At every junction, the robot checks: 
+1. Which paths exist  
+2. Which paths were already visited  
+3. Which path has the lowest mark count  
+Then it chooses the least explored available path. 
+This is smarter than always turning left because the robot can avoid repeating the same route again 
+and again. 
+If the robot reaches a dead end, it can use the ARM_BACK direction to return and continue exploring 
+another path. 
+ 
+11. Backtracking 
+Backtracking means returning from a dead end and trying another route. 
+In this program, backtracking is handled through the memory system. 
+When the robot enters a junction, it knows which direction it came from. If no new paths are 
+available, it can choose the back direction and return to the previous junction. 
+This makes the robot more intelligent because it can recover from wrong paths instead of getting 
+stuck. 
+ 
+12. LED Feedback 
+The robot also uses LEDs to show its current state. 
+Different LED patterns can show: 
+• 
+Line position  
+• 
+Recovery direction  
+• 
+Junction decisions  
+• 
+Finished state  
+This is useful during testing because it allows the user to understand what the robot is detecting 
+without connecting the robot to a computer. 
+
+Conclusion 
+This version is an improved maze solver because it adds memory and backtracking to the basic line-
+following robot. 
+The robot can: 
+• 
+Follow the line using PID control  
+• 
+Detect junctions  
+• 
+Store visited junctions  
+• 
+Track explored paths  
+• 
+Choose less-used paths first  
+• 
+Backtrack from dead ends  
+Overall, this code demonstrates more advanced robot navigation. It uses sensors, PID control, state 
+machines, data structures, and memory-based decision-making to solve the maze more intelligently. 
+ 
+During the internship, the NIBO Burger robot was programmed to perform different autonomous 
+tasks such as motor control, LED interaction, line following, and maze solving. Over time, the 
+project evolved from simple movement programs into more advanced systems using PID control, 
+junction detection, and memory-based navigation. 
+ 
+</pre>
+</main></body></html>
